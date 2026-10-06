@@ -1,0 +1,29 @@
+# Local AI tool state and temporary artifacts
+/.serena/
+/.kilo/
+ai-agent-*
+.playwright-cli/
+
+# Local agent instructions
+AGENTS.md
+/docs/agents/issue-tracker.md
+
+# Private authoring inputs
+/source/
+
+# Local execution, review, and validation logs
+/logs/
+*.log
+
+# Local Markdown specifications and issue tracker
+/.scratch/
+
+# Python validation script caches and virtual environments
+__pycache__/
+*.py[cod]
+/.venv/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini

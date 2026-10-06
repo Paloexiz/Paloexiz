@@ -1,0 +1,4 @@
+interface:
+  display_name: "Animated Foliage Banner"
+  short_description: "Recreate textured foliage banners with anchored motion"
+  default_prompt: "Use $animated-foliage-banner to turn my reference image or available assets into a self-contained animated SVG banner."

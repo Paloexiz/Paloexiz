@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="160" viewBox="0 0 400 160" role="img" aria-labelledby="title desc">
+  <title id="title">Anchored motion example</title>
+  <desc id="desc">Two leaves rotate around fixed stems beside a flexible polygon tip.</desc>
+  <metadata id="fur-motion-data">{"period":4,"tufts":[{"name":"tip","start":0,"tip":1,"end":2,"degrees":20}]}</metadata>
+  <style>
+    .branch { transform-origin: 0 0; animation: branch-wind 4s ease-in-out infinite; }
+    .leaf { transform-origin: 0 0; animation: leaf-flutter 2s ease-in-out infinite; }
+    @keyframes branch-wind { 0%,100% { transform: rotate(-12deg); } 50% { transform: rotate(12deg); } }
+    @keyframes leaf-flutter { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+    .still-contour { display: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .branch, .leaf { animation: none; }
+      .motion-contour { display: none; }
+      .still-contour { display: inline; }
+    }
+  </style>
+  <defs>
+    <path id="fur-outline" d="M220,80L260,20L300,80L300,140L220,140Z"/>
+    <path id="fur-still" d="M220,80L260,20L300,80L300,140L220,140Z"/>
+    <clipPath id="outline-clip" clipPathUnits="userSpaceOnUse">
+      <use class="motion-contour" href="#fur-outline"/>
+      <use class="still-contour" href="#fur-still"/>
+    </clipPath>
+  </defs>
+  <rect width="400" height="160" fill="#f4f1e8"/>
+  <rect width="400" height="160" fill="#806898" clip-path="url(#outline-clip)"/>
+  <g transform="translate(65 115)"><g class="branch"><g class="leaf">
+    <path d="M0,0Q-45,-70 0,-85Q35,-35 0,0Z" fill="#467c67"/>
+  </g></g></g>
+  <g transform="translate(155 125)"><g class="branch" style="animation-delay:-1s"><g class="leaf">
+    <path d="M0,0Q-30,-45 15,-65Q40,-20 0,0Z" fill="#679d83"/>
+  </g></g></g>
+</svg>

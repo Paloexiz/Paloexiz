@@ -9,6 +9,7 @@ import re
 import xml.etree.ElementTree as ET
 from PIL import Image
 from build_fur_poses import check_crossings, validate, velocity_changes
+from scene_metadata import read_motion_data
 
 NS = {'s': 'http://www.w3.org/2000/svg'}
 
@@ -20,7 +21,7 @@ def points(d):
 
 def check(path, quiet=False):
     root = ET.parse(path).getroot()
-    data = json.loads(root.find('.//*[@id="fur-motion-data"]').text)
+    data = read_motion_data(root)
     outline = root.find('.//*[@id="fur-outline"]')
     rest = points(outline.get('d'))
     animation = outline.find('s:animate', NS)
@@ -92,6 +93,38 @@ def check(path, quiet=False):
 def self_test(path):
     original = path.read_bytes()
     check(io.BytesIO(original))
+    mixed = ET.fromstring(original)
+    metadata = mixed.find('.//*[@id="fur-motion-data"]')
+    # Normalize the test copy's JSON without removing potentially referenced children.
+    metadata.text = json.dumps(read_motion_data(mixed))
+    for child in metadata:
+        child.tail = None
+    record = ET.SubElement(metadata, '{http://c2pa.org/manifest}manifest')
+    record.text, record.tail, metadata.text = 'Unrelated provenance payload', metadata.text, None
+    check(io.BytesIO(ET.tostring(mixed)), quiet=True)
+    metadata.remove(record)
+    nested = ET.SubElement(metadata, '{urn:example:motion}data', {'id': 'fur-motion-data'})
+    del metadata.attrib['id']
+    nested.text = record.tail
+    check(io.BytesIO(ET.tostring(mixed)), quiet=True)
+    for text in ('', '{', '[]'):
+        nested.text = text
+        try:
+            read_motion_data(mixed)
+        except ValueError as exc:
+            assert 'JSON object' in str(exc)
+        else:
+            raise AssertionError('Invalid rig metadata accepted')
+    for count in (0, 2):
+        invalid = ET.Element('svg')
+        for _ in range(count):
+            ET.SubElement(invalid, 'metadata', {'id': 'fur-motion-data'}).text = '{}'
+        try:
+            read_motion_data(invalid)
+        except ValueError as exc:
+            assert 'exactly one' in str(exc)
+        else:
+            raise AssertionError('Ambiguous rig metadata accepted')
     for mutation, message in (('empty-style', 'Missing leaf animation'), ('discrete', 'Fur interpolation'), ('static-tip', 'static tip')):
         root = ET.fromstring(original)
         if mutation == 'empty-style':

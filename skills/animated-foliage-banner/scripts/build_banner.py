@@ -7,6 +7,7 @@ import re
 import tempfile
 import xml.etree.ElementTree as ET
 from build_fur_poses import check_crossings, finite, path_data, validate, velocity_changes
+from scene_metadata import read_motion_data
 
 NS = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', NS)
@@ -68,9 +69,11 @@ def build(source, motion_path=None):
     builder = SceneBuilder()
     root = ET.parse(source if motion_path else source / 'scene.svg',
                     parser=ET.XMLParser(target=builder)).getroot()
+    if root.find('.//{http://c2pa.org/manifest}manifest') is not None:
+        raise ValueError('C2PA metadata requires provenance-aware editing; use an unsigned authoring source. Input has not been modified')
     motion = json.loads((motion_path or source / 'motion.json').read_text(encoding='utf-8'))
     outline = root.find('.//*[@id="fur-outline"]')
-    data = json.loads(root.find('.//*[@id="fur-motion-data"]').text)
+    data = read_motion_data(root)
     d = outline.get('d')
     if not re.fullmatch(r'M[\d.,L-]+Z', d):
         raise ValueError('The authored contour must use M/L/Z polygon commands')
@@ -181,6 +184,22 @@ def self_test():
     refreshed, _ = build(BytesIO(annotated), example / 'motion.json')
     assert all(note in refreshed for note in notes), 'Author comments or processing instructions were lost'
     assert build(BytesIO(refreshed), example / 'motion.json')[0] == refreshed
+    mixed = ET.fromstring(payload)
+    metadata = mixed.find('.//*[@id="fur-motion-data"]')
+    expected_data = json.loads(metadata.text)
+    foreign = ET.SubElement(metadata, '{urn:example:provenance}record')
+    foreign.text, foreign.tail, metadata.text = 'Unrelated metadata', metadata.text, None
+    rebuilt, _ = build(BytesIO(ET.tostring(mixed)), example / 'motion.json')
+    retained = ET.fromstring(rebuilt).find('.//*[@id="fur-motion-data"]')
+    assert retained[0].text == 'Unrelated metadata'
+    assert json.loads(retained[0].tail) == expected_data
+    foreign.tag = '{http://c2pa.org/manifest}manifest'
+    try:
+        build(BytesIO(ET.tostring(mixed)), example / 'motion.json')
+    except ValueError as exc:
+        assert 'C2PA' in str(exc)
+    else:
+        raise AssertionError('Signed provenance was silently carried into modified artwork')
     try:
         build(BytesIO(b'<!DOCTYPE svg []>' + annotated), example / 'motion.json')
     except ValueError:

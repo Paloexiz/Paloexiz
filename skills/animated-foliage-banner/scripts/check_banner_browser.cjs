@@ -117,7 +117,7 @@ const { setTime } = require('./render_svg.cjs');
       }
     }
     const sample = () => page.evaluate(() => ({
-      roots: [...document.querySelectorAll('.leaf')].map(e => {
+      matrices: [...document.querySelectorAll('.leaf')].map(e => {
         const m = e.getCTM(); return [m.a,m.b,m.c,m.d,m.e,m.f];
       }),
       active: document.getAnimations().length,
@@ -129,14 +129,66 @@ const { setTime } = require('./render_svg.cjs');
     const b = await sample();
     await page.waitForTimeout(1100);
     const c = await sample();
-    const movement = (first, second) => first.roots.map((m,i) => Math.hypot(100*(m[0]-second.roots[i][0]),100*(m[1]-second.roots[i][1])));
+    const movement = (first, second) => first.matrices.map((m,i) => Math.hypot(100*(m[0]-second.matrices[i][0]),100*(m[1]-second.matrices[i][1])));
     const ab = movement(a,b), ac = movement(a,c);
     const motionSamples = {a,b,c,unchangedAB:ab.flatMap((v,i)=>v <= 1e-5 ? [i] : []),unchangedAC:ac.flatMap((v,i)=>v <= 1e-5 ? [i] : [])};
     fs.writeFileSync(path.join(out, 'motion-samples.json'), JSON.stringify(motionSamples));
-    assert(a.roots.length > 0, 'No leaves to check');
-    assert.equal(a.active, 2 * a.roots.length, 'Expected one branch and one leaf animation per leaf');
-    assert([b,c].every(s => a.roots.every((m,i) => Math.abs(m[4]-s.roots[i][4]) < 1e-6 && Math.abs(m[5]-s.roots[i][5]) < 1e-6)), 'Leaf roots moved');
-    assert(ab.every((v,i) => Math.max(v,ac[i]) > 1e-5), 'A non-root leaf point did not move across three samples');
+    assert(a.matrices.length > 0, 'No leaves to check');
+    assert.equal(a.active, 2 * a.matrices.length, 'Expected one branch and one leaf animation per leaf');
+    assert([b,c].every(s => a.matrices.every((m,i) => Math.abs(m[4]-s.matrices[i][4]) < 1e-6 && Math.abs(m[5]-s.matrices[i][5]) < 1e-6)), 'Leaf transform origins moved');
+    assert(ab.every((v,i) => Math.max(v,ac[i]) > 1e-5), 'A leaf transform did not move the local point (100, 0) across three samples');
+    if (process.argv[4] === '--self-test') {
+      const attachment = await page.evaluate(() => {
+        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        group.innerHTML = '<path d="M 10,0 L 30,-5 L 30,5 Z"/>';
+        document.documentElement.append(group);
+        const sample = () => {
+          const matrix = group.firstElementChild.getCTM();
+          return [new DOMPoint(0, 0), new DOMPoint(10, 0)].map(p => {
+            const result = p.matrixTransform(matrix); return [result.x, result.y];
+          });
+        };
+        try {
+          const before = sample();
+          group.setAttribute('transform', 'rotate(20)');
+          return { before, after: sample() };
+        } finally { group.remove(); }
+      });
+      assert.deepEqual(attachment.before[0], attachment.after[0], 'Counterexample origin should be fixed');
+      assert.notDeepEqual(attachment.before[1], attachment.after[1], 'Offset drawn root should move');
+    }
+    // Check natural preference changes before setTime pauses animations through WAAPI.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const reducedSelection = await checkSelection(true);
+    const checkReduced = async () => {
+      const state = await page.evaluate(() => ({
+        cssAnimations: document.getAnimations().length,
+        staticChildren: document.querySelector('#fur-still').children.length
+      }));
+      assert.equal(state.cssAnimations, 0, 'Reduced motion still has CSS animations');
+      assert.equal(state.staticChildren, 0, 'Reduced fur must have no animated children');
+      return state;
+    };
+    const reduced = await checkReduced();
+    const rejectedReducedMutations = [];
+    if (process.argv[4] === '--self-test') {
+      const style = await page.evaluateHandle(() => {
+        const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+        style.textContent = '@keyframes check-reduced-motion { to { transform: rotate(1deg); } } .leaf { animation: check-reduced-motion 1s infinite !important; }';
+        document.documentElement.append(style);
+        return style;
+      });
+      try {
+        await assert.rejects(checkReduced, /Reduced motion still has CSS animations/);
+        rejectedReducedMutations.push('running-leaf-animation');
+      } finally {
+        await style.evaluate(element => element.remove());
+        await style.dispose();
+      }
+      await checkReduced();
+    }
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await checkSelection(false);
     // Freeze CSS foliage so hidden SMIL geometry alone cannot satisfy the painted-fur check.
     await page.evaluate(() => {
       document.documentElement.style.cssText = 'width:100vw;height:auto';
@@ -148,18 +200,11 @@ const { setTime } = require('./render_svg.cjs');
       furFrames.push({ time, sha256: createHash('sha256').update(frame).digest('hex') });
     }
     assert(new Set(furFrames.map(frame => frame.sha256)).size > 1, 'Visible fur is static with CSS foliage frozen');
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    const reducedSelection = await checkSelection(true);
-    const reduced = await page.evaluate(() => ({
-      cssAnimations: document.getAnimations().length,
-      staticChildren: document.querySelector('#fur-still').children.length
-    }));
-    assert.equal(reduced.cssAnimations, 0);
-    assert.equal(reduced.staticChildren, 0);
-    report.inline = { fixedRoots: a.roots.length, swayingLeaves: a.roots.length, furMoved: true, period,
-      normalSelection, reducedSelection, furFrames, rejectedMutations,
+    report.inline = { fixedOrigins: a.matrices.length, movingLeafTransforms: a.matrices.length,
+      attachmentVerified: false, attachmentNote: 'CTM origins and local point (100, 0) are sampled; actual drawn roots require work-specific verification.', furMoved: true, period,
+      normalSelection, reducedSelection, furFrames, rejectedMutations, rejectedReducedMutations,
       sampleTimes: [a.time,b.time,c.time], unchangedFirstPair: motionSamples.unchangedAB,
-      minNonRootMovement: Math.min(...ab.map((v,i) => Math.max(v,ac[i]))), reduced };
+      minSamplePointMovement: Math.min(...ab.map((v,i) => Math.max(v,ac[i]))), reduced };
     fs.writeFileSync(path.join(out, 'browser-results.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report));
     await context.close();

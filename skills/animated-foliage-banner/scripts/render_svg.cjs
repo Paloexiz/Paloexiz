@@ -43,7 +43,8 @@ async function render(input, output, options = {}) {
   try {
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     const origin = `http://127.0.0.1:${server.address().port}`;
-    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    // Software rendering avoids GPU-dependent edge pixels across browser launches.
+    browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--disable-gpu'] });
     const context = await browser.newContext({ deviceScaleFactor: scale, reducedMotion: motion, serviceWorkers: 'block' });
     const blocked = [];
     await context.route('**/*', route => {
@@ -89,9 +90,9 @@ async function render(input, output, options = {}) {
         clip: { x: crop[0], y: crop[1], width: crop[2], height: crop[3] } });
     }
     const report = { source_sha256: createHash('sha256').update(svg).digest('hex'), browser: browser.version(),
-      mode: 'direct-svg', width, height, scale, viewBox: natural.viewBox, svg_time_seconds: time, css_time_seconds: cssTime,
+      mode: 'direct-svg', rendering: 'software', width, height, scale, viewBox: natural.viewBox, svg_time_seconds: time, css_time_seconds: cssTime,
       motion, crop: crop ?? null, blocked_requests: blocked, warnings, frame_sha256: createHash('sha256').update(frame).digest('hex'),
-      limits: 'Diagnostic rendering with scripts and external resources blocked; not an image-embedding or host compatibility test.' };
+      limits: 'Software diagnostic rendering with scripts and external resources blocked; not an image-embedding, GPU-rendering, or host compatibility test.' };
     fs.writeFileSync(path.join(output, 'render.json'), JSON.stringify(report, null, 2) + '\n');
     return report;
   } finally {
@@ -106,8 +107,10 @@ async function selfTest() {
     const input = path.join(folder, 'neutral.svg');
     fs.writeFileSync(input, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><style>@keyframes slide{to{transform:translateX(30px)}}.leaf{animation:slide 2s linear infinite}</style><rect class="leaf" y="5" width="15" height="15" fill="green"/><circle cy="40" r="7"><animate attributeName="cx" values="10;90;10" dur="2s" repeatCount="indefinite"/></circle><script>document.documentElement.remove()</script></svg>');
     const a = await render(input, path.join(folder, 'first'), { width: 240, scale: 2, crop: [0, 0, 20, 10] });
-    const b = await render(input, path.join(folder, 'repeat'), { width: 240, scale: 2 });
-    assert.equal(a.frame_sha256, b.frame_sha256, 'Fixed-time captures differ');
+    for (let capture = 1; capture < 12; capture++) {
+      const b = await render(input, path.join(folder, `repeat-${capture}`), { width: 240, scale: 2 });
+      assert.equal(a.frame_sha256, b.frame_sha256, `Fixed-time capture ${capture} differs across browser launches`);
+    }
     const smil = await render(input, path.join(folder, 'smil'), { width: 240, scale: 2, time: .5, cssTime: 0 });
     const css = await render(input, path.join(folder, 'css'), { width: 240, scale: 2, time: 0, cssTime: .5 });
     assert.notEqual(a.frame_sha256, smil.frame_sha256, 'SMIL clock did not move the rendered shape');
@@ -116,7 +119,7 @@ async function selfTest() {
     assert.deepEqual([crop.readUInt32BE(16), crop.readUInt32BE(20)], [40, 20]);
     assert.equal(a.height, 120, 'ViewBox aspect ratio was lost');
     await assert.rejects(() => render(input, path.join(folder, 'first')), /EEXIST/);
-    console.log('OK: generic SVG, fixed clocks, independent CSS/SMIL motion, scaling, crop, blocked script, no overwrite');
+    console.log('OK: generic SVG, 12 fixed-time software captures, independent CSS/SMIL motion, scaling, crop, blocked script, no overwrite');
   } finally { fs.rmSync(folder, { recursive: true, force: true }); }
 }
 

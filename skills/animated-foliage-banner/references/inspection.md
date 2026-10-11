@@ -14,6 +14,8 @@ Use an available runtime. For a temporary Python tool environment, `uv run --no-
 
 If Playwright is in a separate workspace, set `NODE_PATH` to its `node_modules` directory before running the commands. Changing the working directory alone does not change an absolute script's module lookup. For example, use `export NODE_PATH=/path/to/tools/node_modules` in a POSIX shell or `$env:NODE_PATH = 'C:/path/to/tools/node_modules'` in PowerShell.
 
+When wrapping these commands, pass the chosen executable and environment to child processes instead of assuming bare `python` or `node` resolves to the same runtime. Resolve package resources from the script location or explicit arguments. Keep verification separate from generation: inspect the delivered SVG as-is; rebuild only when requested, into a separate comparison output. Check the artifact hash before and after verification.
+
 This neutral example exercises assembly, rendering, and comparison without a PSD or private assets:
 
 ```sh
@@ -54,9 +56,37 @@ node scripts/render_svg.cjs ../artwork.svg ../detail --width 800 --time 1.5 --cs
 - `--crop X,Y,WIDTH,HEIGHT` is a rectangle in that rendered canvas, not in unscaled viewBox coordinates. It must fit the canvas. `--scale` controls pixels per CSS pixel; scale 2 makes a 160 × 60 crop into a 320 × 120 PNG. Captures are limited to 64 megapixels.
 - `--motion reduce` selects the document's reduced-motion styles. It does not prove that an embedded image receives the same preference; use the dedicated playback check for that question.
 
-Outputs are `frame.png`, optional `crop.png`, and `render.json`. The report records input/frame hashes, Chrome version, dimensions, clocks, scale, crop, and browser warnings. Compare captures made with the same settings. PNG alpha is preserved.
+Outputs are `frame.png`, optional `crop.png`, and `render.json`. The report records input/frame hashes, Chrome version, rendering mode, dimensions, clocks, scale, crop, and browser warnings. The diagnostic renderer disables GPU hardware acceleration to reduce rasterization variation between independent captures. Compare captures made with the same browser and settings; this does not guarantee identical pixels across machines or versions. PNG alpha is preserved. Software captures are not GPU performance measurements.
 
 The tool serves one SVG over loopback, blocks source scripts and external resources, and never changes the input. Missing external images/fonts can therefore affect a capture; inspect warnings before treating it as a fidelity result. This is a direct-SVG diagnostic, not hosted or image-embedding validation. If Chrome cannot launch, retain the input and report the environment error; do not interpret a missing capture as an artwork failure.
+
+For edge coverage, inspect the intended subject and each relevant shadow at the boundary, including normal/reduced states and motion extremes. A fully opaque background cannot establish their coverage. For attachment, follow the actual root point rather than just the transform origin. For typography, compare glyph appearance with the intended font unavailable. These work-specific questions need chosen regions or isolated geometry; whole-image differences alone cannot answer them.
+
+For an identified root in a directly opened SVG, this snippet runs from the skill directory with an existing Playwright `page`. Supply the element selector, its actual local root coordinates, representative times in seconds, and a justified tolerance in CSS pixels:
+
+```js
+const assert = require('node:assert/strict');
+const { setTime } = require('./scripts/render_svg.cjs');
+
+async function checkRoot(page, selector, point, times, tolerance) {
+  assert(times.length > 1 && Number.isFinite(tolerance) && tolerance >= 0);
+  const samples = [];
+  for (const time of times) {
+    await setTime(page, time, time);
+    samples.push(await page.locator(selector).evaluate((element, [x, y]) => {
+      const matrix = element.getScreenCTM();
+      if (!matrix) throw new Error('Root element has no screen transform');
+      const p = new DOMPoint(x, y).matrixTransform(matrix);
+      return [p.x, p.y];
+    }, point));
+  }
+  const displacement = Math.max(...samples.map(p => Math.hypot(p[0] - samples[0][0], p[1] - samples[0][1])));
+  assert(displacement <= tolerance, `Root moved ${displacement} CSS pixels`);
+  return { samples, displacement };
+}
+```
+
+Call `checkRoot(page, selector, [x, y], times, tolerance)` with values identified from the work. For path deformation, obtain the actual root coordinate in each pose instead of reusing a constant local point. This tests sampled stationarity; separately inspect connection to the supporting geometry. As a negative control, rotate a shape with a root away from its transform origin: the origin can stay fixed while this check rejects the root.
 
 ## Raster comparison
 
@@ -89,5 +119,16 @@ python -B scripts/compare_images.py --self-test
 ```
 
 The tests use neutral generated data. They cover source integrity and hierarchy, ICC-free preview/layer pixel values, frozen CSS/SMIL clocks and crop scaling, and RGBA differences/coordinates/tolerance. The renderer's shared clock helper is also used by `check_banner_browser.cjs`; run that check against the bundled example when changing the helper.
+
+For instruction changes, evaluate behavior as well as syntax. Keep briefs, model/tool versions, skill revision, outputs, and judgments with local evidence. Use the same brief with and without the skill to investigate its influence; a disliked result alone does not identify a prompt's cause. Include these branches when applicable:
+
+| Trial | Check |
+| --- | --- |
+| Original brief without assets | Content follows the brief; helper examples do not supply an unsolicited subject, palette, or layout |
+| Flat reference without source layers | Observed features are preserved; inferred pixels and font substitutions are disclosed |
+| Scene using curves or another motion system | Authoring and verification continue without forcing the polygon contract |
+| Compatible example from a different working directory | Documented commands resolve resources, leave inputs/package unchanged, and produce interpretable evidence |
+
+Evaluate technical correctness separately from visual fit to the brief. Record unchecked branches honestly. These trials assess the skill's behavior; they are not aesthetic scoring rules or a promise of quality across models.
 
 Preserve the reusable scripts and private authoring inputs. Keep only the screenshots and JSON needed to justify a decision in the work's local evidence directory; discard disposable captures and temporary environments once no longer needed. Do not promote a one-work repair script, fixed layer name, palette threshold, or identity-bearing fixture into this skill.

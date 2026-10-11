@@ -1,8 +1,12 @@
 # Production guide
 
-Read the route matching the available input. The routes converge on the same separation of texture, alpha, geometry, effects, and motion. None requires a specific operating system or paid editor.
+Read only the route matching the available input. These are technical methods for the chosen artwork, not requirements to add subjects, texture, lettering, or effects. None requires a specific operating system or paid editor.
 
 ## Input routes
+
+### Original work from a brief
+
+With no reference or assets, establish the intended content and destination from the request, then author the composition independently. State consequential assumptions; ask only when missing information blocks the requested result. There are no hidden source layers or fidelity targets to reconstruct. Select the sections below for the elements actually created. A foliage-only scene need not acquire a character, and an unrelated banner need not acquire foliage to use these tools. The minimal example demonstrates an API contract, not a composition to imitate.
 
 ### A. A single flat PNG/JPG
 
@@ -32,26 +36,16 @@ For color extraction, disable the source masks and shadows that will become dyna
 
 ## Layer assembly
 
-A typical assembly is:
+Choose paint order from the artwork. Separate resources only where motion or compositing requires it:
 
-```text
-shared definitions
-  clean color fields and sprite resources
-  static rest contour
-  animated contour
-  clips, masks, and bounded shadow filters
-background
-  backing color/texture
-  extracted leaves with stationary pivots
-  optional silhouette-shaped reveal or backdrop shadow
-subject
-  reconstructed pattern field clipped by the contour
-  its anchored moving leaves
-  inner shadow derived from that contour
-stationary lettering and its effects
-```
+| When present | Technical separation |
+| --- | --- |
+| Extracted moving foliage | Clean backing field, leaf color/alpha, placement, and local motion |
+| A moving silhouette | Interior paint and contour geometry shared by its relevant clips, masks, and effects |
+| A shadow or reveal | Its geometry, color, blend behavior, and filter region |
+| Lettering | Glyph appearance and any layer/group effects that need independent control |
 
-Match the source's actual paint order rather than enforcing this template when it differs. A mask can reveal a colored backing field and look like a cast shadow; inspect both sides of the mask before choosing a black shadow filter.
+A mask can reveal a colored backing field and look like a cast shadow; inspect both sides before choosing a black shadow filter. Omit components the brief or source does not contain.
 
 Keep grain/detail rasterized where appropriate. Embedded data URLs make an artifact independent of local image files, but increase its byte size. Resize and encode against the actual display size and pixel density. Share repeated resources with references when practical and measure the result.
 
@@ -61,9 +55,9 @@ Canvas cropping is not a physical silhouette edge. Extend a touched contour beyo
 
 ## Motion and the optional fur helper
 
-Keep scene placement in a parent translation and perform local rotation, skew, or controlled bending around `(0, 0)`. Confirm the selected origin is the actual attachment. Use the same wind field for background and subject leaves, with local stiffness and phase differences.
+Keep placement in a parent transform and perform local rotation, skew, or controlled bending around the authored attachment. When using the example's `(0, 0)` convention, place the actual stem endpoint there. A stationary transform origin does not establish that the drawn root is stationary: transform the identified root point through its full ancestor chain at several phases and compare its screen coordinates. Inspect connection to the supporting geometry, using a per-work tolerance in rendered pixels. Related foliage can share wind timing with local stiffness and phase differences.
 
-Author fur spans on a consistent contour. The helper accepts a **closed polygon without a repeated closing vertex**, using sequential indices and non-wrapping tuft ranges:
+For compatible polygonal fur, author spans on a consistent contour. The helper accepts a **closed polygon without a repeated closing vertex**, using sequential indices and non-wrapping tuft ranges:
 
 ```json
 {
@@ -96,12 +90,12 @@ The helper neither segments images nor repairs poor anchors. A wrong mask or roo
 
 The optional `build_banner.py` generates contour motion in an editable SVG using separate motion controls. Pass the SVG and `--motion` to refresh an existing work. A directory input is shorthand for its `scene.svg` and `motion.json`, as used by the bundled example. Its authored tracks use a periodic Catmull–Rom curve, exported as uniformly sampled linear poses. It does not infer missing pixels or original layers. The [minimal scene](../examples/minimal/scene.svg) and [motion controls](../examples/minimal/motion.json) are independent geometric examples.
 
-The assembler and accompanying checks support this deliberately small contract:
+The assembler and accompanying checks support this deliberately small contract. Its IDs, polygon syntax, paired foliage animations, and contour references are tool requirements, not requirements for every work. Curves or other animation systems may be more suitable; verify those with checks tailored to their representation instead of changing the artwork to satisfy this validator.
 
 - A single SVG canvas with unique IDs and finite positive dimensions. Embed image resources as PNG/JPEG/WebP data URLs; keep lettering self-contained and stationary.
 - `path#fur-outline` holds a closed rest polygon in compact `M{x},{y}L{x},{y}...Z` syntax with no repeated closing vertex. `path#fur-still` holds identical rest geometry without children. Directory inputs omit generated animation; SVG inputs may contain one direct `animate` for `d`, whose sampled values will be refreshed from the controls.
 - Refreshing an existing animation preserves its ID. New animations receive `fur-sway`, or the first unused `fur-sway-N` ID if that name is occupied. Other source IDs and references remain unchanged; consumers should locate the animation under `#fur-outline` rather than assume its generated ID.
-- `metadata#fur-motion-data` holds the rig JSON above, omitting `points` and `samples`: these come from the path and requested output intervals. Set `period` explicitly in seconds. Tuft interiors identify the vertices allowed to move; root boundaries and all other vertices stay fixed.
+- Exactly one element with ID `fur-motion-data` holds the rig JSON above in its direct text, omitting `points` and `samples`: these come from the path and requested output intervals. It can be the `metadata` element or a dedicated child within it. Unrelated child payloads are excluded; direct text and child tails are read together. Set `period` explicitly in seconds. Tuft interiors identify the vertices allowed to move; root boundaries and all other vertices stay fixed.
 - `motion.json` contains `intervals` (integer, at least 8), `vertices` (unique moving vertex indices including every tuft tip), and `poses` (at least four equally spaced control frames, each with one `[x,y]` per listed vertex). Omit a repeated closing control. All coordinates are finite source units.
 - Each moving leaf has a stationary placement parent, a `g.branch`, and exactly one direct `g.leaf` child, both using local origin `0 0`. A root stylesheet declares infinite `branch-wind` and `leaf-flutter` CSS animations. The browser check expects exactly these two CSS animations per leaf. Local periods and phase offsets may differ.
 - Each clip, mask, or effect that switches contour has direct `use.motion-contour` and `use.still-contour` children in a shared parent, referencing `#fur-outline` and `#fur-still`. Their presentation attributes match; only ID, class, and href differ. The ordinary view shows the moving reference; reduced motion shows the static one and disables leaf CSS motion. Parent IDs, pair counts, transforms, and colors are artwork inputs.
@@ -116,11 +110,13 @@ python -B scripts/build_banner.py --self-test
 
 For directory inputs, write output outside that directory. SVG input and output may be the same file: validation finishes before a temporary file is written beside the output and atomically replaces it. Keep the editable SVG under version control and retain its motion controls and build recipe; there is no need to maintain a second scene copy. Edit textures, lettering and effects directly in the SVG. Update motion controls when changing the rest contour or rig; generated animation values are replaced on refresh. Author comments and processing instructions are retained inside and outside the root; DTD-bearing inputs are rejected before writing. XML serialization may normalize formatting and namespace prefixes. The example needs Python 3.10+ with its standard library only. `--self-test` checks ID collisions, repeatable refresh, author notes and rejection of unrelated animation or DTDs in memory. Private inputs need not be published to make the generic workflow usable.
 
+The checker reads rig metadata without authenticating provenance. The assembler rejects SVGs containing a C2PA manifest before writing: XML reserialization and geometry edits can invalidate signed bindings. Use an unsigned authoring source or a provenance-aware editing tool; do not strip credentials merely to pass assembly. See the [C2PA guidance](https://spec.c2pa.org/specifications/specifications/2.2/ux/UX_Recommendations.html) for the distinction between edited content and valid provenance.
+
 ## Stable lettering
 
-Preserve readable text content separately from glyph geometry. Font shaping determines glyph selection, kerning, advances, and offsets; path extraction then produces stable outlines. Use a native style export when a complex glow or blend effect cannot be reproduced acceptably with simple SVG filters.
+When lettering is present, preserve readable text content separately from glyph geometry. A system font stack can substitute glyphs on another machine; `textLength` constrains spacing/length, not the glyph shapes. For fixed appearance, shape the actual font first (glyph selection, kerning, advances, and offsets), then export positioned outlines, or retain a suitable rendered text asset. Extracting each character's outline without shaping can lose ligatures and spacing. If live text is intentional, state the fallback behavior and inspect it without the preferred local font. Use a native style export when a complex glow or blend effect cannot be reproduced acceptably with simple SVG filters.
 
-Record the actual font source, file/version, and applicable license. Include license files if distributing font software. A rendered wordmark and a redistributed font package are different outputs. Keep each work's identity and typography out of reusable examples.
+Record the actual font source, file/version, hash, and applicable license reference; record shaping/export settings when relevant. Include license files if distributing font software. A rendered wordmark and a redistributed font package are different outputs. Keep each work's identity and typography out of reusable examples. No particular typeface or shaping library is required.
 
 ## Reduced motion and image-host constraints
 
@@ -149,7 +145,11 @@ node scripts/check_banner_browser.cjs ../example.svg ../browser-check --self-tes
 
 The Python check verifies positional closure, fixed roots, moving tips, sampled geometry, linear interpolation, uniform timing, contour pairs, leaf animation declarations, ID uniqueness, href references, and embedded image decoding. It reports displacement and velocity changes without imposing one work's aesthetic thresholds on another. `--self-test` rejects missing leaf styles, discrete interpolation, and static tips in memory without changing the source. Run checks without Python's optimization flag, which disables assertions. Declaration checks do not prove effective playback, and this is not a full SVG sanitizer or a validator for arbitrary CSS.
 
-The browser check requires Node.js, an available `playwright` package, and installed Chrome. Use an existing runtime or a separate tool environment; no browser library is shipped inside the SVG. It serves the input over loopback and verifies ordinary/reduced-motion `<img>` captures at 1024 and 375 CSS pixels, with an independent image-mode control. In a directly opened SVG, it samples leaf roots and moving non-root points, discovers contour pairs, checks their effective selection in both media modes, and freezes CSS foliage to isolate visible contour motion at zero, one-quarter, and one-half of its declared period. Changing a hidden definition alone cannot pass. `--self-test` selects static contours at all discovered sites together and each site individually; these mutations must fail the ordinary-selection assertion. Mutations remain in the browser DOM.
+When changing the checker, run `python -B scripts/test_check_fur_motion.py` as well. This Pillow-dependent regression builds the neutral example and runs the checker CLI with and without `--self-test` from a temporary working directory. It covers direct, tail, split, and nested rig JSON plus referenced metadata children, and verifies that input bytes remain unchanged. Test fixtures are temporary; no additional artwork or font is needed.
+
+The browser check requires Node.js, an available `playwright` package, and installed Chrome. Use an existing runtime or a separate tool environment; no browser library is shipped inside the SVG. It serves the input over loopback and verifies ordinary/reduced-motion `<img>` captures at 1024 and 375 CSS pixels, with an independent image-mode control. In a directly opened SVG, it samples leaf CTMs, discovers contour pairs, and checks their effective selection in both media modes before pausing any animations. It then restores normal motion and freezes CSS foliage to isolate visible contour motion at zero, one-quarter, and one-half of its declared period. Changing a hidden definition alone cannot pass. `--self-test` rejects static contours selected during ordinary playback and running leaf CSS during reduced motion. Mutations remain in the browser DOM and are removed after each assertion.
+
+The report's `fixedOrigins` counts stationary CTM origins; `movingLeafTransforms` and `minSamplePointMovement` describe the synthetic local point `(100, 0)` in SVG viewport units. They replace the former `fixedRoots`, `swayingLeaves`, and `minNonRootMovement` names. `attachmentVerified: false` is deliberate: no arbitrary drawn root is inferred. A self-test rotates a neutral shape whose root is offset from its origin to demonstrate that limitation. Use identified root coordinates and the [screen-space sampling example](inspection.md#fixed-time-rendering) for actual attachment checks.
 
 Screenshots and result JSON are written under the specified output directory. Finite sampling can miss defects or require adjustment for unusually slow or symmetric motion. It does not establish every frame's correctness, source fidelity, hosted behavior, cross-browser compatibility, or performance. Visual review and work-specific thresholds remain necessary; layouts outside this contract require adapted checks.
 
@@ -157,20 +157,28 @@ Keep `check_banner_browser.cjs` beside `render_svg.cjs`, which supplies its shar
 
 ### Checks for each work
 
-Keep a small per-work build record containing:
+Keep a small per-work build record for the elements that exist:
 
 - Supplied input identities and hashes, canvas/viewBox mapping, and source resolution.
 - Which regions are observed, extracted, inferred, substituted, or unavailable.
-- Authored alpha masks, leaf pivots, silhouette contour, tuft definitions, and static pose.
+- Applicable alpha masks, identified attachment points, contours, deformation controls, and static presentation.
 - Source effect parameters where available; fitted estimates where not.
 - Font provenance, image encoding settings, dependency versions, and deterministic seeds.
 - Durable assembly command and the visual/structural comparison used to accept a rebuild.
 
-Do not put the only authoring script or rig in disposable output. Keep private inputs in durable, backed-up local storage excluded from publication. Exact byte reproduction may be impossible with some native exports; define a visual and structural tolerance instead of silently claiming byte identity.
+Name the authoritative editable input: either a directly edited SVG plus motion controls, or a generator plus its source inputs. Regeneration must not silently replace manual edits to another file presented as editable. Keep verification read-only; an explicit rebuild used for comparison writes to a separate candidate path, then compares it with the retained artifact. In-place refresh is an intentional authoring operation, not a prerequisite for inspecting a delivered file.
 
-Test syntax and internal references, but also intentionally remove leaf motion and switch fur to discrete interpolation in memory to establish that the motion check detects those failures. When a static fallback exists, test that selecting it during ordinary playback fails too. Check the contour references actually used by clips, masks, and shadows; isolate fur from foliage motion rather than inferring visible motion from an animated definition. Check stationary roots and lettering, moving tips, crop coverage, color contamination, shadow synchronization, reduced-motion output, and both sides of the loop. Use an actual image element in addition to any inline diagnostic view.
+Keep required scripts and controls in durable storage. Resolve resource paths from the script or an explicit input, not the caller's working directory or one machine's home directory. Pass the selected interpreter/tool path and dependency environment to child commands too. Test documented commands from another working directory with outputs outside the package; a same-machine rebuild alone does not establish portability to a clean environment. Record unavailable dependencies rather than installing into or modifying the distributed skill.
 
-Measure payload, browser rendering, and mobile layout under stated conditions. Background-tab throttling or window occlusion can distort requestAnimationFrame samples. Compare candidate and baseline under equivalent conditions; do not extrapolate a short desktop test to all viewers.
+Exact byte reproduction may be impossible with some native exports; define a visual and structural tolerance instead of silently claiming byte identity.
+
+Test syntax and references, then select checks for the actual scene. Where applicable, exercise attached roots, moving tips, text appearance, shadow synchronization, exposed pixels, reduced motion, and the loop boundary. Establish detection with small temporary defects: remove expected motion, choose a static fallback during normal playback, detach an identified root, or introduce a known coverage gap. Retain the original unchanged. Isolate the feature under test; other moving elements cannot establish that a particular contour moves. Use an actual image element in addition to a direct diagnostic view.
+
+An opaque background makes a full-image alpha check pass even when a subject or shadow misses the canvas edge. Inspect the required painted region in normal and reduced presentations at relevant extrema. Use isolated layers or work-specific color/mask comparisons with [fixed-time crops and image differences](inspection.md#raster-comparison); confirm a deliberately shortened subject or shadow fails that check. State sample times and thresholds. Pixel coverage does not prove source fidelity or natural motion.
+
+Measure payload and responsive layout on the final artifact. For performance claims, record browser version, device, viewport, embedding mode, visibility, duration, and baseline. A parent page's requestAnimationFrame intervals measure scheduling, not the cost of rendering its SVG image. Use browser profiling evidence for CPU/rendering cost; describe unavailable GPU or device measurements as unmeasured. Validate image-mode reduced motion with an independent control before using it as a baseline. Compare under equivalent conditions; short desktop traces do not establish all-viewer performance.
+
+Bind the final report and previews to the delivered SVG hash, input/control hashes, generator revision, commands, and capture settings. Recheck these after the last edit; superseded evidence stays labeled as such. Keep technical checks, visual review against the brief, and hosted verification as separate results.
 
 ## Primary references
 

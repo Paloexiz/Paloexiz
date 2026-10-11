@@ -1,20 +1,20 @@
 ---
 name: animated-foliage-banner
-description: Create or refine textured SVG banners with anchored leaf or fur motion and stationary lettering. Use when reproducing this style from an image or correcting its animation, masks, or shadows. Layered sources are optional.
+description: Technical production and validation for SVG banners containing anchored foliage or fur motion, from supplied artwork or an original brief. Use for animation, compositing, self-contained image delivery, and verification. Not an aesthetic guide or a general banner template; layered sources are optional.
 license: MIT
 ---
 
 # Animated Foliage Banner
 
-Preserve the supplied artwork's composition, grain, leaf shapes, silhouette, and lettering while adding attached local motion. Adapt to the actual subject and palette; do not assume a particular identity, font, layer stack, or canvas size.
+This skill supplies technical methods. The brief or supplied artwork determines subject, composition, palette, typography, texture, and effects. For reproduction, preserve observed visual features and identify approximations. For original work, make those creative decisions independently; the example and script contracts are test inputs, not design targets.
 
 ## Workflow
 
-1. **Inspect the available input.** A flat PNG/JPG is sufficient. Use the matching [input route](references/production.md#input-routes); read the layered-source route only when one is supplied. Ask only for missing information that materially changes the result. Identify inferred hidden pixels, substituted fonts, and estimated effects.
-2. **Separate paint from geometry.** Keep clean color fields, leaf alpha, silhouette masks, background shadows, inner shadows, and lettering effects distinct. Remove a moving leaf's stationary duplicate and fill its swept area. Follow [layer assembly](references/production.md#layer-assembly) when authoring masks or effects.
-3. **Anchor motion.** Keep each stem and tuft root fixed; increase movement toward tips. Include small visible tufts. Share wind timing across the artwork and shared contour geometry across related clips, masks, and shadows. Use the [polygon helper and scene contract](references/production.md#motion-and-the-optional-fur-helper) only for compatible authored geometry.
-4. **Compare the rendered result.** Use the [inspection tools](references/inspection.md) for source inventory, fixed-time crops, and image differences. Choose the check that answers the observed question; do not run every tool for every edit. Preserve stationary lettering and compare shadow scope, softness, crop coverage, and exposed texture at motion extremes.
-5. **Verify the intended embedding and deliver.** Keep image-mode SVGs self-contained. When using the bundled scene contract, run its [structural and browser checks](references/production.md#scene-contract-checks). Default motion remains continuous when requested; the [reduced-motion presentation](references/production.md#reduced-motion-and-image-host-constraints) must cover CSS foliage and all SMIL-driven contour uses. Report the tested host and any approximations.
+1. **Choose the input route.** Use the matching [route](references/production.md#input-routes), including an original brief with no assets. Ask only for missing information that materially changes the result. Record what is supplied, inferred, or newly authored.
+2. **Implement the chosen scene.** Read [layer assembly](references/production.md#layer-assembly) when separating extracted pixels, masks, or effects. Build only the components present in the work. For extracted moving leaves, remove stationary duplicates and fill their swept areas.
+3. **Anchor the motion that needs attachment.** Identify actual stem and tuft roots, then vary movement toward the tips. Related clips, masks, and shadows must follow the same geometry. The [polygon helper and scene contract](references/production.md#motion-and-the-optional-fur-helper) apply only to compatible geometry; choose another implementation when they constrain the intended shape.
+4. **Compare the rendered result.** Use the [inspection tools](references/inspection.md) for the observed question. Check relevant motion extremes, effects, coverage, and text against the brief or reference. Technical passes do not establish visual quality; review that separately.
+5. **Verify the intended embedding and deliver.** Keep image-mode SVGs self-contained. Use [scene-contract checks](references/production.md#scene-contract-checks) only for that contract; otherwise adapt verification to the authored scene. Continuous motion and [reduced-motion output](references/production.md#reduced-motion-and-image-host-constraints) must satisfy the brief and cover every visible animation. Report exactly what was tested and what remains uncertain.
 
 ## Choose a tool
 

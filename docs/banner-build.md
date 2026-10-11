@@ -1,10 +1,10 @@
 # Banner authoring and assembly
 
-Start with a flat image, separated assets, or an optional layered source. Follow the [production guide](../skills/animated-foliage-banner/references/production.md) to separate textures, leaf alpha, fixed pivots, contour geometry, shadows, and lettering. A PSD and a paid editor are not prerequisites. Identify reconstructed hidden pixels and estimated effects explicitly.
+Start with an original brief, a flat image, separated assets, or an optional layered source. The [production guide](../skills/animated-foliage-banner/references/production.md) covers technical methods for the elements actually present. The brief or reference determines the composition and appearance; a PSD and a paid editor are not prerequisites. Identify reconstructed hidden pixels and estimated effects explicitly.
 
 ## Authoring inputs
 
-The optional assembler takes an editable SVG and separate motion controls:
+For artwork compatible with its scene contract, the optional assembler takes an editable SVG and separate motion controls:
 
 - The SVG contains embedded textures or vector shapes, leaf placement and CSS motion, lettering, masks, effects, a rest contour, a rig, and reduced-motion selection. The displayed artifact can also be the editable input.
 - `motion.json`: contour vertex indices, equally spaced periodic control poses, and output sampling density.
@@ -38,7 +38,7 @@ With Node.js, Playwright, and installed Chrome, check actual image embedding:
 node skills/animated-foliage-banner/scripts/check_banner_browser.cjs example.svg browser-check --self-test
 ```
 
-See [check coverage and limits](../skills/animated-foliage-banner/references/production.md#scene-contract-checks). Keep generated examples, screenshots, and execution reports local. These checks do not replace visual comparison with the supplied reference or verification on the intended host.
+See [check coverage and limits](../skills/animated-foliage-banner/references/production.md#scene-contract-checks). This example exercises helper APIs; it is not a visual template. Keep generated examples, screenshots, and execution reports local. These checks do not replace visual review against the brief or reference, or verification on the intended host.
 
 For source inspection or a localized visual question, use the [diagnostic workflow](../skills/animated-foliage-banner/references/inspection.md): optional PSD inventory, fixed-time SVG captures, and same-size raster comparison. That guide includes a neutral end-to-end example, runtime requirements, parameter units, outputs, and limits. These operations also work outside the authored scene contract.
 
@@ -48,4 +48,4 @@ Keep one editable SVG and reference it directly from the README with a relative 
 
 When distributing the skill itself, follow its [package hygiene check](../skills/animated-foliage-banner/references/inspection.md#checks-and-retention) on the actual candidate directory or archive; repository ignore rules do not control direct copies.
 
-For repeatable assembly, retain the SVG, motion controls and generator version in their appropriate public or private storage. Compare output hashes when refreshing unchanged inputs; use a reviewed visual and structural tolerance when changing native exports or encoders. Regenerating contour motion does not repeat the earlier extraction, tracing, texture repair, or typography work automatically.
+For repeatable assembly, retain the SVG, motion controls and generator version in their appropriate public or private storage. Verification reads the retained artifact without rebuilding it. To check reproducibility, explicitly rebuild to a separate candidate and compare output hashes; use a reviewed visual and structural tolerance when changing native exports or encoders. If a work uses a generator as its authoritative source instead, document that boundary and protect manual SVG edits. Pass selected runtimes to child commands and test path resolution from another working directory. Regenerating contour motion does not repeat earlier extraction, tracing, texture repair, or typography work automatically.

@@ -100,18 +100,35 @@ const { setTime } = require('./render_svg.cjs');
     const rejectedMutations = [];
     if (process.argv[4] === '--self-test') {
       for (const targets of [sites, ...sites.map(site => [site])]) {
-        const style = await page.evaluateHandle(targets => {
-          const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-          style.textContent = targets.map(site => `${site} > .motion-contour { display: none !important; } ${site} > .still-contour { display: inline !important; }`).join('\n');
-          document.documentElement.append(style);
-          return style;
+        const mutation = await page.evaluateHandle(targets => {
+          const entries = targets.flatMap(site => [['motion-contour', 'none'], ['still-contour', 'inline']].map(([className, display]) => {
+            const element = document.querySelector(`${site} > use.${className}`);
+            return { element, display, originalStyle: element.getAttribute('style') };
+          }));
+          return { entries, targets, style: document.createElementNS('http://www.w3.org/2000/svg', 'style') };
         }, targets);
         try {
+          await mutation.evaluate(({ entries, targets, style }) => {
+            style.textContent = targets.map(site => `svg ${site} > use.motion-contour { display: inline !important; } svg ${site} > use.still-contour { display: none !important; }`).join('\n');
+            document.documentElement.append(style);
+            for (const { element, display } of entries) element.style.setProperty('display', display, 'important');
+          });
+          assert(await mutation.evaluate(({ entries }) => entries.every(({ element, display }) => getComputedStyle(element).display === display)),
+            'Normal-selection self-test failed to switch contour display');
           await assert.rejects(() => checkSelection(false), /Normal visible fur selection/);
           rejectedMutations.push(targets);
         } finally {
-          await style.evaluate(element => element.remove());
-          await style.dispose();
+          try {
+            const restored = await mutation.evaluate(({ entries, style }) => {
+              for (const { element, originalStyle } of entries) {
+                element.setAttribute('style', originalStyle ?? '');
+                if (originalStyle === null) element.removeAttribute('style');
+              }
+              style.remove();
+              return entries.every(({ element, originalStyle }) => element.getAttribute('style') === originalStyle);
+            });
+            assert(restored, 'Normal-selection self-test did not restore the original inline styles');
+          } finally { await mutation.dispose(); }
         }
         await checkSelection(false);
       }
@@ -172,18 +189,33 @@ const { setTime } = require('./render_svg.cjs');
     const reduced = await checkReduced();
     const rejectedReducedMutations = [];
     if (process.argv[4] === '--self-test') {
-      const style = await page.evaluateHandle(() => {
-        const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-        style.textContent = '@keyframes check-reduced-motion { to { transform: rotate(1deg); } } .leaf { animation: check-reduced-motion 1s infinite !important; }';
-        document.documentElement.append(style);
-        return style;
+      const mutation = await page.evaluateHandle(() => {
+        const leaf = document.querySelector('.leaf');
+        return { leaf, originalStyle: leaf.getAttribute('style'),
+          style: document.createElementNS('http://www.w3.org/2000/svg', 'style') };
       });
       try {
+        await mutation.evaluate(({ leaf, style }) => {
+          style.textContent = '@keyframes check-reduced-motion { to { transform: rotate(1deg); } } svg .leaf { animation: none !important; }';
+          document.documentElement.append(style);
+          leaf.style.setProperty('animation', 'check-reduced-motion 1s linear infinite', 'important');
+        });
+        assert(await mutation.evaluate(({ leaf }) => leaf.getAnimations().some(animation =>
+          animation.animationName === 'check-reduced-motion' && animation.playState === 'running')),
+        'Reduced-motion self-test failed to start its CSS animation');
         await assert.rejects(checkReduced, /Reduced motion still has CSS animations/);
         rejectedReducedMutations.push('running-leaf-animation');
       } finally {
-        await style.evaluate(element => element.remove());
-        await style.dispose();
+        try {
+          const restored = await mutation.evaluate(({ leaf, originalStyle, style }) => {
+            // Set before removing so SVG's pending inline-style serialization is cleared.
+            leaf.setAttribute('style', originalStyle ?? '');
+            if (originalStyle === null) leaf.removeAttribute('style');
+            style.remove();
+            return leaf.getAttribute('style') === originalStyle;
+          });
+          assert(restored, 'Reduced-motion self-test did not restore the original inline style');
+        } finally { await mutation.dispose(); }
       }
       await checkReduced();
     }
